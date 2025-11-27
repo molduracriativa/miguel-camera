@@ -1,83 +1,36 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>Moldura - Foto & Vídeo MP4</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="background:#000; color:#fff;">
 
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #000;
-    font-family: sans-serif;
+<button id="btn" style="padding:20px;font-size:22px;">
+ATIVAR CÂMERA
+</button>
+
+<video id="video" autoplay playsinline style="width:100%;margin-top:20px;"></video>
+
+<script>
+btn.onclick = async () => {
+  console.log("BOTÃO CLICADO");
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: false
+    });
+
+    console.log("CÂMERA OK!", stream);
+
+    video.srcObject = stream;
+
+  } catch (e) {
+    console.error("ERRO:", e);
+    alert("ERRO: " + e.name);
   }
+};
+</script>
 
-  #video, #overlay, #render-canvas {
-    position: absolute;
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-    top: 0;
-    left: 0;
-  }
-
-  #overlay { pointer-events: none; }
-
-  #buttons {
-    position: absolute;
-    bottom: 40px;
-    width: 100%;
-    display: none;
-    justify-content: center;
-    gap: 30px;
-    z-index: 20;
-  }
-
-  button {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    border: none;
-    background: #fff;
-    font-size: 26px;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-  }
-
-  #stop-record { background: red; color: #fff; display: none; }
-
-  #preview-container {
-    position: absolute;
-    bottom: 20px;
-    width: 100%;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    z-index: 30;
-  }
-
-  #preview-video, #photo-preview {
-    width: 90vw;
-    max-width: 350px;
-    border-radius: 10px;
-    border: 3px solid white;
-    margin-bottom: 10px;
-    background: #000;
-  }
-
-  #save-btn, #retry-btn {
-    background: #4CAF50;
-    color: white;
-    padding: 10px 20px;
-    border-radius: 6px;
-    font-size: 16px;
-    border: none;
-    margin-top: 8px;
-    width: 200px;
-  }
-
-  #enable-camera-btn {
-    position: abs
+</body>
+</html>
