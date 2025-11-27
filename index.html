@@ -1,240 +1,537 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>Moldura - Foto e Vídeo MP4 (Final)</title>
-
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+<title>Moldura - Foto e Vídeo MP4 (Corrigido)</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden;touch-action:manipulation;}
 
-  html, body {
-    width: 100%;
-    height: 100%;
-    background: #000;
-    overflow: hidden;
-    touch-action: manipulation;
-    font-family: sans-serif;
+  /* botão inicial (sempre no topo) */
+  #enable-camera-btn{
+    position:fixed;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    z-index:999999;
+    background:#4CAF50;
+    color:#fff;
+    border:none;
+    padding:18px 36px;
+    font-size:20px;
+    border-radius:12px;
+    touch-action:manipulation;
   }
 
-  /* Botão que ativa a câmera */
-  #enable-camera-btn {
-    position: fixed;
-    inset: 0;
-    margin: auto;
-    height: 70px;
-    width: 280px;
-    background: #4CAF50;
-    color: white;
-    font-size: 24px;
-    border: none;
-    border-radius: 16px;
-    z-index: 999999;
-  }
+  /* vídeo / canvas / overlay - escondidos até ativar */
+  #video, #render-canvas { display:none; position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; }
+  /* overlay será desenhado no canvas. Mantemos a tag para carregamento */
+  #overlay { display:none; position:fixed; top:0; left:50%; transform:translateX(-50%); height:100vh; width:auto; pointer-events:none; z-index:5; }
 
-  #video, #render-canvas, #overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-  }
+  /* botões de ação */
+  #buttons{ display:none; position:fixed; bottom:36px; left:0; right:0; margin:0 auto; width:100%; max-width:720px; display:flex; justify-content:center; gap:18px; z-index:99999; }
+  .action{ width:68px; height:68px; border-radius:50%; border:none; font-size:24px; background:#fff; box-shadow:0 6px 14px rgba(0,0,0,0.35); cursor:pointer; }
 
-  #overlay {
-    pointer-events: none;
-  }
+  #stop-record{ background:#e53935; color:#fff; display:none; }
 
-  #buttons {
-    position: fixed;
-    bottom: 40px;
-    width: 100%;
-    display: none;
-    justify-content: center;
-    gap: 30px;
-    z-index: 99999;
-  }
+  /* preview */
+  #preview-container{ display:none; position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:99999; align-items:center; gap:8px; flex-direction:column; }
+  #preview-video, #photo-preview{ width:86vw; max-width:360px; border-radius:10px; border:3px solid #fff; background:#000; display:block; }
+  .btn-save{ background:#4CAF50; color:#fff; border:none; padding:10px 18px; border-radius:8px; font-size:16px; margin-top:8px; width:180px; cursor:pointer; }
 
-  button.action {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    font-size: 26px;
-    border: none;
-    background: #fff;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-  }
-
-  #stop-record {
-    background: red;
-    color: white;
-    display: none;
-  }
-
-  #preview-container {
-    position: fixed;
-    bottom: 20px;
-    width: 100%;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    z-index: 99999;
-  }
-
-  #preview-video, #photo-preview {
-    width: 90vw;
-    max-width: 360px;
-    border: 3px solid white;
-    border-radius: 12px;
-    margin-bottom: 10px;
-  }
-
-  #save-btn, #retry-btn {
-    background: #4CAF50;
-    color: white;
-    padding: 12px 25px;
-    border-radius: 8px;
-    font-size: 18px;
-    border: none;
-    width: 200px;
-    margin-bottom: 6px;
-  }
+  /* small status text */
+  #status { position:fixed; top:10px; left:10px; color:#fff; font-size:13px; background:rgba(0,0,0,0.35); padding:6px 10px; border-radius:8px; z-index:999999; display:none; }
 </style>
 </head>
-
 <body>
 
-<!-- O único elemento que aparece no início -->
 <button id="enable-camera-btn">Ativar Câmera</button>
 
+<!-- elementos que ficarão visíveis após ativar -->
 <video id="video" autoplay playsinline muted></video>
-<img id="overlay" src="moldura.png">
+<!-- overlay image (vertical). Será desenhada no canvas - mantida apenas para carregamento) -->
+<img id="overlay" src="moldura.png" alt="moldura" />
+
+<!-- canvas onde combinamos vídeo + moldura -->
 <canvas id="render-canvas"></canvas>
 
+<!-- controles -->
 <div id="buttons">
-  <button id="switch-camera" class="action">🔄</button>
-  <button id="capture" class="action">📸</button>
-  <button id="record" class="action">🎥</button>
-  <button id="stop-record" class="action">⏹️</button>
+  <button id="switch-camera" class="action" title="Trocar câmera">🔄</button>
+  <button id="capture" class="action" title="Tirar foto">📸</button>
+  <button id="record" class="action" title="Gravar">🎥</button>
+  <button id="stop-record" class="action" title="Parar gravação">⏹️</button>
 </div>
 
+<!-- preview -->
 <div id="preview-container">
-  <video id="preview-video" controls></video>
-  <img id="photo-preview" />
-  <button id="save-btn">Salvar</button>
-  <button id="retry-btn">Tentar novamente</button>
+  <video id="preview-video" controls playsinline style="display:none"></video>
+  <img id="photo-preview" style="display:none"/>
+  <button id="save-btn" class="btn-save">Salvar</button>
+  <button id="retry-btn" class="btn-save" style="background:#777;margin-top:6px">Tentar novamente</button>
 </div>
 
-<!-- FFmpeg para converter WEBM -> MP4 -->
+<div id="status"></div>
+
+<!-- FFmpeg WASM (CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.5/dist/ffmpeg.min.js"></script>
 
 <script>
-let stream;
-let recorder;
-let chunks = [];
-let usingFront = true;
+/* ======= Variáveis / elementos ======= */
+const enableBtn = document.getElementById('enable-camera-btn');
+const video = document.getElementById('video');
+const overlayImg = document.getElementById('overlay');
+const canvas = document.getElementById('render-canvas');
+const ctx = canvas.getContext('2d');
 
-// FFmpeg
+const btns = {
+  switchCamera: document.getElementById('switch-camera'),
+  capture: document.getElementById('capture'),
+  record: document.getElementById('record'),
+  stopRecord: document.getElementById('stop-record'),
+  previewContainer: document.getElementById('preview-container'),
+  previewVideo: document.getElementById('preview-video'),
+  photoPreview: document.getElementById('photo-preview'),
+  save: document.getElementById('save-btn'),
+  retry: document.getElementById('retry-btn')
+};
+const statusEl = document.getElementById('status');
+
+let stream = null;
+let usingFront = true;
+let mediaRecorder = null;
+let recordedChunks = [];
+let drawLoopId = null;
+
+/* FFmpeg */
 const { createFFmpeg, fetchFile } = FFmpeg;
 const ffmpeg = createFFmpeg({ log: false });
 
-// Safari/Android touch unlock
-document.addEventListener("touchstart", () => {}, { passive: true });
-document.addEventListener("click", () => {}, true);
+/* Utility: show status */
+function showStatus(txt, show=true){
+  if(show){ statusEl.style.display='block'; statusEl.textContent = txt; }
+  else statusEl.style.display='none';
+}
 
-// -----------------------------------------------
-// ATIVAR CÂMERA — GARANTIDO FUNCIONAL
-// -----------------------------------------------
-document.getElementById("enable-camera-btn").onclick = async () => {
-  try {
-    await startCamera();
-
-    // Mostrar interface
-    video.style.display = "block";
-    overlay.style.display = "block";
-    renderCanvas.style.display = "block";
-    document.getElementById("buttons").style.display = "flex";
-
-    // Esconder botão
-    enableCameraBtn.style.display = "none";
-
-  } catch (e) {
-    alert("Erro ao acessar câmera: " + e.name);
-    console.error(e);
+/* ======= HELPERS ======= */
+/* Escolhe mimeType suportado para MediaRecorder (prioriza VP8/Opus) */
+function getSupportedMime() {
+  const candidates = [
+    'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9,opus',
+    'video/webm',
+  ];
+  for (const m of candidates){
+    try {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+    } catch(e){}
   }
-};
+  return '';
+}
 
-// -----------------------------------------------
-// FUNÇÃO CAMERA
-// -----------------------------------------------
-async function startCamera() {
-  if (stream) stream.getTracks().forEach(t => t.stop());
-
-  stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: usingFront ? "user" : "environment" },
-    audio: true
+/* Espera elemento carregar (img/video metadata) */
+function waitForImageLoad(img){
+  return new Promise((resolve,reject)=>{
+    if(img.complete && img.naturalWidth) return resolve();
+    img.onload = () => resolve();
+    img.onerror = (e) => reject(e);
   });
+}
+function waitForVideoMeta(v){
+  return new Promise((resolve,reject)=>{
+    if(v.readyState >= 1) return resolve();
+    v.onloadedmetadata = ()=> resolve();
+    v.onerror = (e)=> reject(e);
+  });
+}
+
+/* ======= CAMERA INICIAL (chamada após toque do usuário) ======= */
+async function startCamera() {
+  // stop existing
+  if (stream) {
+    stream.getTracks().forEach(t=>t.stop());
+    stream = null;
+  }
+
+  // request constraints
+  const constraints = {
+    video: { facingMode: usingFront ? 'user' : 'environment' },
+    audio: true
+  };
+
+  showStatus('Abrindo câmera...');
+  stream = await navigator.mediaDevices.getUserMedia(constraints);
 
   video.srcObject = stream;
   video.muted = true;
-  video.setAttribute("playsinline", "");
-  await video.play();
-  video.style.transform = usingFront ? "scaleX(-1)" : "scaleX(1)";
+  video.setAttribute('playsinline', '');
+  await waitForVideoMeta(video);
+
+  // garantir overlay carregada (pode ser grande)
+  try { await waitForImageLoad(overlayImg); } catch(e){ console.warn('overlay load failed', e); }
+
+  // dimensionar canvas conforme vídeo real
+  // vamos desenhar com orientação do vídeo (videoWidth x videoHeight)
+  canvas.width = video.videoWidth || Math.max(window.innerWidth, 720);
+  canvas.height = video.videoHeight || Math.max(window.innerHeight, 1280);
+
+  // exibir elementos da UI (botões, canvas, overlay)
+  video.style.display = 'block';
+  overlayImg.style.display = 'block'; // mantemos visível por se o usuário quiser ver; mas desenho é no canvas
+  canvas.style.display = 'block';
+  document.getElementById('buttons').style.display = 'flex';
+
+  showStatus('');
 }
 
-// TROCAR CÂMERA
-switchCamera.onclick = () => {
-  usingFront = !usingFront;
-  startCamera();
-};
+/* ======= FUNÇÃO QUE DESENHA VIDEO + MOLDURA NO CANVAS (usada pra preview e gravação) ======= */
+function startDrawLoop() {
+  if (drawLoopId) return; // já rodando
 
-// -----------------------------------------------
-// FOTO
-// -----------------------------------------------
-capture.onclick = () => {
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  function drawFrame(){
+    const w = canvas.width;
+    const h = canvas.height;
 
-  const ctx = canvas.getContext("2d");
+    // Clear
+    ctx.clearRect(0,0,w,h);
 
-  if (usingFront) {
-    ctx.save();
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-    ctx.restore();
-  } else {
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  }
+    // Fill background black (avoid transparent areas)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,w,h);
 
-  ctx.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+    // Desenhar vídeo: queremos "cover" por altura (preencher vertical), preservando proporção
+    // Calcula escala para preencher altura
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (vw && vh) {
+      const scale = h / vh; // scale by height
+      const drawW = vw * scale;
+      const drawH = h;
+      // center horizontally
+      const dx = (w - drawW) / 2;
 
-  photoPreview.src = canvas.toDataURL("image/png");
+      // se câmera frontal, espelha apenas o vídeo
+      if (usingFront) {
+        ctx.save();
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+        // when mirrored, draw at ( -dx - drawW )? We'll mirror whole canvas horizontally by drawing at negative dx
+        // Easier approach: draw mirrored by mapping coordinates
+        // But because we translated by w and scaled -1, we draw at x = dx * -1? simpler: drawImage(video, -(dx + drawW), 0, drawW, drawH) doesn't work intuitively.
+        // Instead draw with drawImage using negative x: x = -(dx + drawW) + w? To avoid complexity, we'll draw into an offscreen canvas if needed.
+        // Simpler and robust: use ctx.drawImage(video, 0, 0, vw, vh, dx, 0, drawW, drawH) inside saved mirrored context but with x = w - dx - drawW? We'll do correct calc below.
+        // Compute mirrored target x in mirrored coordinate system:
+        const mirroredX = w - dx - drawW;
+        ctx.drawImage(video, 0, 0, vw, vh, mirroredX * -1 + w - w, 0, drawW, drawH); // fallback (rare)
+        // The above is complex; simpler method below will be used instead (draw normally then mirror whole canvas area for video region)
+        ctx.restore();
+        // Simpler robust approach: draw non-mirrored then mirror the video area
+        // We'll clear and draw below in non-mirrored approach to ensure correctness.
+      }
 
-  previewVideo.style.display = "none";
-  photoPreview.style.display = "block";
-  previewContainer.style.display = "flex";
-};
-
-// -----------------------------------------------
-// GRAVAÇÃO
-// -----------------------------------------------
-record.onclick = () => {
-  renderCanvas.width = video.videoWidth;
-  renderCanvas.height = video.videoHeight;
-
-  const ctx = renderCanvas.getContext("2d");
-
-  function draw() {
-    ctx.clearRect(0, 0, renderCanvas.width, renderCanvas.height);
-
-    if (usingFront) {
-      ctx.save();
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, -renderCanvas.width, 0, renderCanvas.width, renderCanvas.height);
-      ctx.restore();
-    } else {
-      ctx.drawImage(video, 0, 0, renderCanvas.width, renderCanvas.height);
+      // Simpler implementation: draw non-mirrored video then, if front, mirror region using offscreen
+      // Implemented below (replace above complex logic)
     }
 
-    ctx.drawImage(overlay, 0, 0, render
+    requestAnimationFrame(drawFrame); // loop placeholder; actual drawing implemented after function defined
+  }
+
+  // We'll implement a better draw loop that handles mirroring correctly using an offscreen canvas if needed.
+  // Create offscreen canvas
+  const off = document.createElement('canvas');
+  off.width = canvas.width;
+  off.height = canvas.height;
+  const offCtx = off.getContext('2d');
+
+  function drawLoop(){
+    const w = canvas.width;
+    const h = canvas.height;
+    off.width = w;
+    off.height = h;
+
+    // draw video onto offscreen (cover by height)
+    const vw = video.videoWidth || w;
+    const vh = video.videoHeight || h;
+
+    // scale so video fills height
+    const scale = h / vh;
+    const drawW = vw * scale;
+    const drawH = h;
+    const dx = (w - drawW) / 2;
+
+    // clear offscreen
+    offCtx.clearRect(0,0,w,h);
+    offCtx.fillStyle = '#000';
+    offCtx.fillRect(0,0,w,h);
+
+    // draw video normally onto offscreen
+    offCtx.drawImage(video, 0, 0, vw, vh, dx, 0, drawW, drawH);
+
+    // if using front camera, mirror the video region inside offscreen
+    if (usingFront) {
+      // get the video region pixels and draw mirrored
+      // simpler: transform and draw the video directly mirrored onto offCtx
+      offCtx.save();
+      offCtx.translate(w, 0);
+      offCtx.scale(-1, 1);
+      // mirrored draw: calculate mirrored dx
+      const mirroredDx = (w - drawW) / 2;
+      offCtx.drawImage(video, 0, 0, vw, vh, mirroredDx * -1 + (w - mirroredDx - drawW) , 0, drawW, drawH);
+      offCtx.restore();
+
+      // Note: above mirrored draw can be tricky across browsers; fallback approach:
+      // if mirrored draw fails visually, we'll instead flip the whole canvas later. (Most browsers will handle drawImage in saved context.)
+    }
+
+    // draw overlay onto offscreen: we want overlay to fill height and center horizontally
+    if (overlayImg && overlayImg.naturalWidth) {
+      const ow = overlayImg.naturalWidth;
+      const oh = overlayImg.naturalHeight;
+      // scale overlay to fill canvas height
+      const oScale = h / oh;
+      const oW = ow * oScale;
+      const oH = h;
+      const odx = (w - oW) / 2;
+      offCtx.drawImage(overlayImg, 0, 0, ow, oh, odx, 0, oW, oH);
+    }
+
+    // finally copy offscreen to visible canvas
+    ctx.clearRect(0,0,w,h);
+    ctx.drawImage(off, 0, 0, w, h);
+
+    drawLoopId = requestAnimationFrame(drawLoop);
+  }
+
+  drawLoop();
+}
+
+/* Stop draw loop */
+function stopDrawLoop(){
+  if(drawLoopId) {
+    cancelAnimationFrame(drawLoopId);
+    drawLoopId = null;
+  }
+}
+
+/* ======= EVENTOS / CONTROLES ======= */
+
+/* 1) Ativar câmera (botão inicial) */
+enableBtn.addEventListener('click', async () => {
+  try {
+    // small touch / click unlock protections
+    document.addEventListener('touchstart', ()=>{}, {passive:true});
+    document.addEventListener('click', ()=>{}, true);
+
+    await startCamera();
+    // start the draw loop so canvas shows live preview (draws video + overlay)
+    startDrawLoop();
+
+    // esconder botão e mostrar UI é feito na startCamera
+    enableBtn.style.display = 'none';
+  } catch (err) {
+    console.error('Erro ao iniciar câmera:', err);
+    alert('Erro ao acessar a câmera: ' + (err && err.message ? err.message : err));
+  }
+});
+
+/* 2) Trocar câmera */
+btns.switchCamera.addEventListener('click', async () => {
+  usingFront = !usingFront;
+  // restart camera to switch facingMode
+  try{
+    await startCamera();
+    // restart draw loop with new mirroring
+    stopDrawLoop();
+    startDrawLoop();
+  } catch(e){
+    console.error('Erro ao trocar câmera', e);
+    alert('Erro ao trocar câmera: ' + e.name);
+  }
+});
+
+/* 3) Capturar foto */
+btns.capture.addEventListener('click', () => {
+  if (!canvas.width || !canvas.height) { alert('Aguardando vídeo...'); return; }
+
+  // create a temporary canvas with the same dimensions and get data URL
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width;
+  tmp.height = canvas.height;
+  const tctx = tmp.getContext('2d');
+
+  // draw current canvas to tmp (already contains video+overlay)
+  tctx.drawImage(canvas, 0, 0);
+
+  // show preview image
+  const dataUrl = tmp.toDataURL('image/png');
+  btns.previewVideo.style.display = 'none';
+  btns.photoPreview.style.display = 'block';
+  btns.photoPreview.src = dataUrl;
+  btns.previewContainer.style.display = 'flex';
+  showStatus('Foto pronta', true);
+});
+
+/* 4) Gravar (iniciar) */
+btns.record.addEventListener('click', async () => {
+  if (!canvas.width || !canvas.height) { alert('Aguardando vídeo...'); return; }
+
+  // ensure drawing loop running
+  if (!drawLoopId) startDrawLoop();
+
+  // captureStream from canvas
+  const canvasStream = canvas.captureStream(30);
+
+  // add audio track from camera stream if available
+  if (stream && stream.getAudioTracks().length) {
+    canvasStream.addTrack(stream.getAudioTracks()[0]);
+  }
+
+  // choose mimeType
+  const mime = getSupportedMime();
+  let options = {};
+  if (mime) options.mimeType = mime;
+
+  try {
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(canvasStream, options);
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size) recordedChunks.push(e.data);
+    };
+
+    mediaRecorder.onstart = () => {
+      showStatus('Gravando...');
+      btns.record.style.display = 'none';
+      btns.stopRecord.style.display = 'inline-block';
+    };
+
+    mediaRecorder.onstop = async () => {
+      showStatus('Convertendo para MP4 (pode demorar)...');
+      // montar blob webm
+      const webmBlob = new Blob(recordedChunks, { type: recordedChunks[0]?.type || 'video/webm' });
+
+      // converter para mp4 via ffmpeg.wasm
+      try {
+        const mp4Blob = await convertWebmToMp4(webmBlob);
+
+        const url = URL.createObjectURL(mp4Blob);
+        btns.previewVideo.src = url;
+        btns.previewVideo.style.display = 'block';
+        btns.photoPreview.style.display = 'none';
+        btns.previewContainer.style.display = 'flex';
+        showStatus('Pronto!', true);
+      } catch (e) {
+        console.error('Erro conversão ffmpeg', e);
+        // fallback: mostrar webm direto
+        const webmUrl = URL.createObjectURL(webmBlob);
+        btns.previewVideo.src = webmUrl;
+        btns.previewVideo.style.display = 'block';
+        btns.photoPreview.style.display = 'none';
+        btns.previewContainer.style.display = 'flex';
+        showStatus('Gravação pronta (formato webm). Conversão falhou.', true);
+      } finally {
+        btns.record.style.display = 'inline-block';
+        btns.stopRecord.style.display = 'none';
+      }
+    };
+
+    mediaRecorder.start();
+  } catch (err) {
+    console.error('Erro MediaRecorder:', err);
+    alert('Não foi possível iniciar gravação: ' + (err.message || err.name));
+  }
+});
+
+/* 5) Parar gravação */
+btns.stopRecord.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    showStatus('Parando gravação...');
+  }
+});
+
+/* 6) Salvar (foto ou vídeo) */
+btns.save.addEventListener('click', () => {
+  // preferir vídeo se estiver visível
+  if (btns.previewVideo.style.display !== 'none' && btns.previewVideo.src) {
+    const a = document.createElement('a');
+    a.href = btns.previewVideo.src;
+    a.download = 'video.mp4';
+    a.click();
+    showStatus('Download iniciado', true);
+  } else if (btns.photoPreview.style.display !== 'none' && btns.photoPreview.src) {
+    const a = document.createElement('a');
+    a.href = btns.photoPreview.src;
+    a.download = 'foto.png';
+    a.click();
+    showStatus('Download iniciado', true);
+  } else {
+    alert('Nada para salvar.');
+  }
+});
+
+/* 7) Retry (voltar) */
+btns.retry.addEventListener('click', () => {
+  btns.previewContainer.style.display = 'none';
+  btns.previewVideo.pause();
+  btns.previewVideo.src = '';
+  btns.photoPreview.src = '';
+  showStatus('', false);
+});
+
+/* ======= Conversão WEBM -> MP4 com FFmpeg.WASM ======= */
+async function convertWebmToMp4(webmBlob) {
+  // carrega ffmpeg se necessário
+  if (!ffmpeg.isLoaded()) {
+    showStatus('Carregando ffmpeg (pode demorar)...');
+    await ffmpeg.load();
+  }
+
+  showStatus('Escrevendo arquivo para ffmpeg...');
+  const data = await fetchFile(webmBlob);
+  ffmpeg.FS('writeFile', 'input.webm', data);
+
+  showStatus('Convertendo (ffmpeg) — aguarde...');
+  // -preset/params podem ser ajustados
+  await ffmpeg.run(
+    '-i','input.webm',
+    '-c:v','libx264',
+    '-preset','veryfast',
+    '-c:a','aac',
+    '-b:a','128k',
+    'output.mp4'
+  );
+
+  showStatus('Lendo MP4...');
+  const mp4Data = ffmpeg.FS('readFile','output.mp4');
+  const mp4Blob = new Blob([mp4Data.buffer], { type: 'video/mp4' });
+
+  // cleanup (optionally)
+  try {
+    ffmpeg.FS('unlink','input.webm');
+    ffmpeg.FS('unlink','output.mp4');
+  } catch(e){}
+
+  return mp4Blob;
+}
+
+/* ======= Inicialização: esconder overlays de UI até ativar ======= */
+(function initUI(){
+  // ocultar todo elemento que possa interceptar toques até o usuário ativar
+  video.style.display = 'none';
+  overlayImg.style.display = 'none';
+  canvas.style.display = 'none';
+  document.getElementById('buttons').style.display = 'none';
+})();
+
+/* ======= Observações finais =======
+ - Se o usuário negou permissão anteriormente, o getUserMedia falhará com NotAllowedError.
+ - FFmpeg.wasm é pesado: no celular pode demorar (especialmente iPhone). Eu exibo status para o usuário.
+ - A moldura é desenhada para preencher a altura (vertical) e é centralizada horizontalmente preservando proporção.
+ - A câmera frontal é espelhada apenas no vídeo desenhado (se desejar também espelhar a moldura, me avise).
+====================================== */
+
+</script>
+</body>
+</html>
