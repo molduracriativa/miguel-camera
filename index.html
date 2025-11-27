@@ -2,120 +2,55 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>Miguel 1 ano — Story Frame</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Miguel 1 ano — Frame Story</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;width:100%;background:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
-
-  /* câmera (preview) */
-  #video{
-    position:absolute;
-    inset:0;
-    width:100vw;
-    height:100vh;
-    object-fit:cover;
-    z-index:1;
-    background:#000;
-    transform-origin:center;
-  }
-
-  /* Moldura (visual) - usamos contain para não esticar */
-  #overlay{
-    position:absolute;
-    inset:0;
-    width:100vw;
-    height:100vh;
-    object-fit:contain; /* mantém proporção 9:16 e preenche o máximo sem esticar */
-    pointer-events:none;
-    z-index:2;
-  }
-
-  /* controles */
-  #controls{
-    position:absolute;
-    bottom:36px;
-    left:50%;
-    transform:translateX(-50%);
-    display:flex;
-    gap:18px;
-    z-index:20;
-    align-items:center;
-  }
-
-  .btn{
-    width:68px;height:68px;border-radius:50%;border:none;background:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;
-    box-shadow:0 6px 18px rgba(0,0,0,.35);
-  }
-
-  /* preview container */
-  #preview {
-    position:absolute;
-    bottom:26px;
-    left:50%;
-    transform:translateX(-50%);
-    display:none;
-    flex-direction:column;
-    align-items:center;
-    gap:8px;
-    z-index:30;
-  }
-
-  #photo, #video-play {
-    width:86vw;
-    max-width:360px;
-    border-radius:12px;
-    border:3px solid #fff;
-    background:#000;
-  }
-
-  .action {
-    padding:10px 18px;
-    border-radius:8px;
-    border:none;
-    background:#2196F3;
-    color:#fff;
-    cursor:pointer;
-    font-weight:600;
-  }
-
-  .danger { background:#ff3b30 }
-
-  /* small text for iPhone instruction */
-  #info {
-    color:#fff;
-    font-size:13px;
-    text-align:center;
-    margin-top:6px;
-    display:none;
-  }
-
-  /* hide native controls on mobile video when shown as preview (we keep controls enabled for playback) */
-  #video-play::-internal-media-controls-download-button{display:none}
+  /* Video preview */
+  #video{position:absolute;inset:0;width:100vw;height:100vh;object-fit:cover;z-index:1;background:#000;transform-origin:center}
+  /* Overlay (visual) keeps aspect with contain */
+  #overlay{position:absolute;inset:0;width:100vw;height:100vh;object-fit:contain;pointer-events:none;z-index:2}
+  /* Controls */
+  #controls{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);display:flex;gap:14px;z-index:30}
+  .btn{width:68px;height:68px;border-radius:50%;border:none;background:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+  /* start camera explicit (for iOS) */
+  #startCam{position:absolute;left:50%;top:16px;transform:translateX(-50%);z-index:35;padding:8px 14px;border-radius:8px;border:none;background:#2196F3;color:#fff;font-weight:600;cursor:pointer}
+  /* Preview area */
+  #preview{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);display:none;flex-direction:column;align-items:center;gap:8px;z-index:40}
+  #photo,#video-play{width:86vw;max-width:360px;border-radius:10px;border:3px solid #fff;background:#000}
+  .action{padding:10px 18px;border-radius:8px;border:none;background:#2196F3;color:#fff;cursor:pointer;font-weight:600}
+  .danger{background:#ff3b30}
+  #info{color:#fff;font-size:13px;text-align:center;margin-top:6px;display:none}
+  /* small responsive tweaks */
+  @media(min-width:900px){ #photo,#video-play{max-width:500px} }
 </style>
 </head>
 <body>
 
-<!-- Preview video (camera) -->
+<!-- Camera preview -->
 <video id="video" autoplay playsinline muted></video>
 
-<!-- Visual overlay (moldura) -->
-<img id="overlay" src="moldura.png" alt="Moldura Story">
+<!-- Visual overlay (moldura.png) -->
+<img id="overlay" src="moldura.png" alt="Moldura">
 
-<!-- Hidden canvas used to compose (video frame + moldura) -->
+<!-- Canvas (oculto) para compor frames com a moldura -->
 <canvas id="canvas" style="display:none"></canvas>
 
-<!-- Controls -->
+<!-- Start camera (útil em iOS quando autoplay bloqueado) -->
+<button id="startCam">Iniciar câmera</button>
+
+<!-- Controls: switch, foto, gravar -->
 <div id="controls">
   <button id="switchBtn" class="btn" title="Trocar câmera">🔄</button>
   <button id="photoBtn" class="btn" title="Tirar foto">📸</button>
   <button id="recordBtn" class="btn" title="Gravar">🎥</button>
 </div>
 
-<!-- Preview (photo or recorded video) -->
+<!-- Preview (foto ou vídeo) -->
 <div id="preview">
   <img id="photo" style="display:none" alt="Foto com moldura">
-  <video id="video-play" style="display:none" controls></video>
+  <video id="video-play" controls style="display:none"></video>
   <div style="display:flex;gap:10px">
     <button id="saveBtn" class="action">Salvar</button>
     <button id="retryBtn" class="action danger">Refazer</button>
@@ -125,5 +60,278 @@
 
 <script>
 /*
-  Versão final otimizada para Android + iPhone.
-  - Moldura 9:16 (conta
+  Código final otimizado:
+  - moldura.png (1080x1920) com object-fit: contain
+  - foto + vídeo SALVOS com a moldura aplicada
+  - preview frontal fica espelhado, arquivos finais NÃO ficam espelhados
+  - start button para contornar autoplay bloqueado em iOS
+*/
+
+const videoEl = document.getElementById('video');
+const overlayEl = document.getElementById('overlay');
+const canvas = document.getElementById('canvas');
+
+const startCamBtn = document.getElementById('startCam');
+const switchBtn = document.getElementById('switchBtn');
+const photoBtn = document.getElementById('photoBtn');
+const recordBtn = document.getElementById('recordBtn');
+
+const preview = document.getElementById('preview');
+const photoEl = document.getElementById('photo');
+const videoPlay = document.getElementById('video-play');
+const saveBtn = document.getElementById('saveBtn');
+const retryBtn = document.getElementById('retryBtn');
+const info = document.getElementById('info');
+
+let stream = null;
+let usingFront = true;
+let mediaRecorder = null;
+let recordedChunks = [];
+let drawInterval = null;
+
+// espelhar apenas o preview
+function setPreviewMirror(mirror){
+  videoEl.style.transform = mirror ? 'scaleX(-1)' : 'none';
+}
+
+// tenta iniciar camera (pode ser chamado por startCamBtn)
+async function startCamera(){
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  const constraints = {
+    video: {
+      facingMode: usingFront ? 'user' : 'environment',
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: true
+  };
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    videoEl.srcObject = stream;
+    setPreviewMirror(usingFront);
+    // esconder botão start se funcionar
+    startCamBtn.style.display = 'none';
+  } catch (err) {
+    console.error('Erro ao iniciar câmera:', err);
+    alert('Não foi possível acessar a câmera. Verifique permissões.');
+  }
+}
+
+// Desenhar overlay com "contain" mantendo proporção (baseado na naturalWidth/naturalHeight da moldura)
+function drawOverlayContain(ctx, canvasW, canvasH){
+  const fw = overlayEl.naturalWidth || 1080;
+  const fh = overlayEl.naturalHeight || 1920;
+  const fr = fw / fh;
+  const cr = canvasW / canvasH;
+  let drawW, drawH, x, y;
+  if (fr > cr){
+    drawW = canvasW;
+    drawH = canvasW / fr;
+    x = 0;
+    y = (canvasH - drawH) / 2;
+  } else {
+    drawH = canvasH;
+    drawW = canvasH * fr;
+    x = (canvasW - drawW) / 2;
+    y = 0;
+  }
+  ctx.drawImage(overlayEl, x, y, drawW, drawH);
+}
+
+// Compor frame: desenha vídeo (não espelhado no resultado final) + overlay (contain)
+function composeFrame(ctx, canvasW, canvasH){
+  // preview pode estar espelhado por CSS; queremos o arquivo final NÃO espelhado
+  const previewMirrored = (videoEl.style.transform || '').includes('scaleX(-1)');
+  ctx.clearRect(0,0,canvasW,canvasH);
+
+  if (previewMirrored){
+    // desenha vídeo invertendo horizontalmente para cancelar o espelho visual
+    ctx.save();
+    ctx.translate(canvasW, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(videoEl, 0, 0, canvasW, canvasH);
+    ctx.restore();
+  } else {
+    ctx.drawImage(videoEl, 0, 0, canvasW, canvasH);
+  }
+
+  // overlay com contain
+  drawOverlayContain(ctx, canvasW, canvasH);
+}
+
+// obtém tamanho de canvas baseado nas dimensões reais do video element (ou fallback)
+function getCanvasSize(){
+  const vw = videoEl.videoWidth || 1080;
+  const vh = videoEl.videoHeight || 1920;
+  return { w: vw, h: vh };
+}
+
+/* ---------- FOTO ---------- */
+photoBtn.addEventListener('click', async () => {
+  if (!stream){
+    await startCamera();
+    if (!stream) return;
+  }
+  if (videoEl.readyState < 2) await new Promise(r => videoEl.onloadedmetadata = r);
+
+  const { w, h } = getCanvasSize();
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr, dpr);
+
+  composeFrame(ctx, w, h);
+
+  photoEl.src = canvas.toDataURL('image/png');
+  photoEl.style.display = 'block';
+  videoPlay.style.display = 'none';
+  preview.style.display = 'flex';
+  info.style.display = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'block' : 'none';
+});
+
+/* ---------- GRAVAÇÃO ---------- */
+recordBtn.addEventListener('click', async () => {
+  if (!stream){
+    await startCamera();
+    if (!stream) return;
+  }
+  if (!mediaRecorder) startRecording();
+  else stopRecording();
+});
+
+function startRecording(){
+  if (videoEl.readyState < 2){
+    videoEl.onloadedmetadata = () => startRecording();
+    return;
+  }
+
+  const { w, h } = getCanvasSize();
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr, dpr);
+
+  // desenha frames constantemente
+  drawInterval = setInterval(() => {
+    composeFrame(ctx, w, h);
+  }, 33);
+
+  // pega stream do canvas (vídeo) e adiciona áudio original se disponível
+  const canvasStream = canvas.captureStream(30);
+  const audioTrack = stream.getAudioTracks()[0];
+  if (audioTrack) canvasStream.addTrack(audioTrack);
+
+  // criar MediaRecorder com fallbacks
+  recordedChunks = [];
+  let options = { mimeType: 'video/webm;codecs=vp9' };
+  try {
+    mediaRecorder = new MediaRecorder(canvasStream, options);
+  } catch (e1) {
+    try { mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp8' }); }
+    catch (e2) {
+      try { mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' }); }
+      catch (e3) {
+        // se chegar aqui, MediaRecorder não é suportado
+        clearInterval(drawInterval);
+        drawInterval = null;
+        alert('Gravação de vídeo não é suportada neste navegador. Atualize o navegador ou use Chrome/Safari recentes.');
+        mediaRecorder = null;
+        return;
+      }
+    }
+  }
+
+  mediaRecorder.ondataavailable = (ev) => { if (ev.data && ev.data.size) recordedChunks.push(ev.data); };
+
+  mediaRecorder.onstop = () => {
+    clearInterval(drawInterval);
+    drawInterval = null;
+
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    videoPlay.src = url;
+    videoPlay.style.display = 'block';
+    photoEl.style.display = 'none';
+    preview.style.display = 'flex';
+    info.style.display = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'block' : 'none';
+
+    mediaRecorder = null;
+    recordBtn.style.background = '';
+    recordBtn.title = 'Gravar';
+  };
+
+  mediaRecorder.start();
+  // UI
+  recordBtn.style.background = '#ff3b30';
+  recordBtn.title = 'Parar';
+}
+
+function stopRecording(){
+  if (mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+  }
+}
+
+/* ---------- SALVAR / REFAZER ---------- */
+saveBtn.addEventListener('click', () => {
+  if (photoEl.style.display === 'block'){
+    const a = document.createElement('a');
+    a.href = photoEl.src;
+    a.download = 'foto-moldura.png';
+    a.click();
+  } else if (videoPlay.style.display === 'block'){
+    const a = document.createElement('a');
+    a.href = videoPlay.src;
+    a.download = 'video-moldura.webm';
+    a.click();
+  }
+});
+
+retryBtn.addEventListener('click', () => {
+  preview.style.display = 'none';
+  if (videoPlay.src && videoPlay.src.startsWith('blob:')) URL.revokeObjectURL(videoPlay.src);
+  videoPlay.src = '';
+  photoEl.src = '';
+});
+
+/* ---------- TROCAR CÂMERA ---------- */
+switchBtn.addEventListener('click', async () => {
+  usingFront = !usingFront;
+  await startCamera();
+});
+
+/* ---------- BOTÃO INICIAR CÂMERA ---------- */
+startCamBtn.addEventListener('click', async () => {
+  await startCamera();
+});
+
+/* ---------- Inicia automaticamente se possível, senão espera interação do usuário ---------- */
+overlayEl.addEventListener('load', () => {
+  startCamera().catch(e => {
+    // provável que iOS peça gesto do usuário — então mostramos o botão start
+    console.warn('Autostart falhou — aguarde interação do usuário.', e);
+    startCamBtn.style.display = 'block';
+  });
+});
+
+/* ---------- Economiza recursos ao sair da aba ---------- */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && drawInterval) {
+    clearInterval(drawInterval);
+    drawInterval = null;
+  }
+});
+</script>
+</body>
+</html>
