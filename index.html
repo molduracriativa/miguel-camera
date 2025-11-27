@@ -1,25 +1,129 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Moldura Story</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Miguel 1 ano — Story Frame</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;background:#000;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
 
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+  /* câmera (preview) */
+  #video{
+    position:absolute;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    object-fit:cover;
+    z-index:1;
+    background:#000;
+    transform-origin:center;
+  }
 
-    body,
-    html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: black;
-      font-family: Arial, sans-serif;
-    }
+  /* Moldura (visual) - usamos contain para não esticar */
+  #overlay{
+    position:absolute;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    object-fit:contain; /* mantém proporção 9:16 e preenche o máximo sem esticar */
+    pointer-events:none;
+    z-index:2;
+  }
 
-    /* Câ*
+  /* controles */
+  #controls{
+    position:absolute;
+    bottom:36px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:18px;
+    z-index:20;
+    align-items:center;
+  }
+
+  .btn{
+    width:68px;height:68px;border-radius:50%;border:none;background:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);
+  }
+
+  /* preview container */
+  #preview {
+    position:absolute;
+    bottom:26px;
+    left:50%;
+    transform:translateX(-50%);
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    z-index:30;
+  }
+
+  #photo, #video-play {
+    width:86vw;
+    max-width:360px;
+    border-radius:12px;
+    border:3px solid #fff;
+    background:#000;
+  }
+
+  .action {
+    padding:10px 18px;
+    border-radius:8px;
+    border:none;
+    background:#2196F3;
+    color:#fff;
+    cursor:pointer;
+    font-weight:600;
+  }
+
+  .danger { background:#ff3b30 }
+
+  /* small text for iPhone instruction */
+  #info {
+    color:#fff;
+    font-size:13px;
+    text-align:center;
+    margin-top:6px;
+    display:none;
+  }
+
+  /* hide native controls on mobile video when shown as preview (we keep controls enabled for playback) */
+  #video-play::-internal-media-controls-download-button{display:none}
+</style>
+</head>
+<body>
+
+<!-- Preview video (camera) -->
+<video id="video" autoplay playsinline muted></video>
+
+<!-- Visual overlay (moldura) -->
+<img id="overlay" src="moldura.png" alt="Moldura Story">
+
+<!-- Hidden canvas used to compose (video frame + moldura) -->
+<canvas id="canvas" style="display:none"></canvas>
+
+<!-- Controls -->
+<div id="controls">
+  <button id="switchBtn" class="btn" title="Trocar câmera">🔄</button>
+  <button id="photoBtn" class="btn" title="Tirar foto">📸</button>
+  <button id="recordBtn" class="btn" title="Gravar">🎥</button>
+</div>
+
+<!-- Preview (photo or recorded video) -->
+<div id="preview">
+  <img id="photo" style="display:none" alt="Foto com moldura">
+  <video id="video-play" style="display:none" controls></video>
+  <div style="display:flex;gap:10px">
+    <button id="saveBtn" class="action">Salvar</button>
+    <button id="retryBtn" class="action danger">Refazer</button>
+  </div>
+  <div id="info">No iPhone: toque e segure para salvar na Fototeca.</div>
+</div>
+
+<script>
+/*
+  Versão final otimizada para Android + iPhone.
+  - Moldura 9:16 (conta
