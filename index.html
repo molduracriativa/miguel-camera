@@ -1,49 +1,126 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no" />
-<title>Moldura - Foto e Vídeo MP4 (Final)</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  html,body{
-    width:100%;height:100%;
-    background:#000;font-family:Arial,Helvetica,sans-serif;
-    overflow:hidden; touch-action:manipulation;
-    -webkit-user-select:none; user-select:none;
-    -webkit-touch-callout:none;
-  }
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>Camera Base</title>
 
-  /* botão inicial (sempre no topo) */
-  #enable-camera-btn{
-    position:fixed;
-    left:50%;
-    top:50%;
-    transform:translate(-50%,-50%);
-    z-index:999999;
-    background:#4CAF50;
-    color:#fff;
-    border:none;
-    padding:18px 36px;
-    font-size:20px;
-    border-radius:12px;
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body,html{
+    width:100%;height:100%;background:#000;overflow:hidden;
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
     touch-action:manipulation;
   }
 
-  /* vídeo / canvas / overlay - escondidos até ativar */
-  #video, #render-canvas {
-    display:none;
-    position:fixed;
-    inset:0;
-    width:100vw;
-    height:100vh;
-    object-fit:cover;
+  #enable{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    background:#4CAF50;color:#fff;border:none;padding:18px 36px;
+    font-size:22px;border-radius:12px;z-index:99999;
   }
 
-  /* overlay é apenas imagem para carregar; será desenhada no canvas */
-  #overlay {
-    display:none;
-    position:fixed;
-    top:0;
-    left:50%;
-    transform:translateX(-50%);
+  #video{
+    display:none;position:fixed;inset:0;width:100vw;height:100vh;
+    object-fit:cover;z-index:1;pointer-events:none;
+  }
+
+  #buttons{
+    display:none;position:fixed;bottom:28px;left:0;right:0;
+    justify-content:center;gap:20px;z-index:99999;
+  }
+
+  #buttons button{
+    width:70px;height:70px;border-radius:50%;border:none;
+    background:#fff;font-size:26px;cursor:pointer;
+    pointer-events:auto;
+  }
+</style>
+</head>
+
+<body>
+
+<button id="enable">Ativar Câmera</button>
+
+<video id="video" autoplay playsinline muted></video>
+
+<div id="buttons">
+  <button id="switch">🔄</button>
+  <button id="photo">📸</button>
+</div>
+
+<script>
+let stream=null;
+let front=true;
+const video=document.getElementById("video");
+
+const enableBtn=document.getElementById("enable");
+const switchBtn=document.getElementById("switch");
+const photoBtn=document.getElementById("photo");
+const buttons=document.getElementById("buttons");
+
+document.addEventListener("touchstart",()=>{}, {passive:true});
+document.addEventListener("click",()=>{}, true);
+
+/* ---- iniciar câmera ---- */
+async function startCam(){
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode: front ? "user":"environment" },
+    audio:false
+  });
+
+  video.srcObject = stream;
+  await video.play();
+
+  video.style.display="block";
+  buttons.style.display="flex";
+
+  if(front){
+    video.style.transform="scaleX(-1)";
+  } else {
+    video.style.transform="scaleX(1)";
+  }
+}
+
+enableBtn.onclick = async()=>{
+  try{
+    await startCam();
+    enableBtn.style.display="none";
+  }catch(e){
+    alert("Erro: "+e);
+  }
+};
+
+/* ---- trocar câmera ---- */
+switchBtn.onclick = async()=>{
+  front=!front;
+  await startCam();
+};
+
+/* ---- tirar foto (simples) ---- */
+photoBtn.onclick = ()=>{
+  const c=document.createElement("canvas");
+  c.width = video.videoWidth;
+  c.height = video.videoHeight;
+  const ctx=c.getContext("2d");
+
+  if(front){
+    ctx.save();
+    ctx.scale(-1,1);
+    ctx.drawImage(video,-c.width,0,c.width,c.height);
+    ctx.restore();
+  }else{
+    ctx.drawImage(video,0,0,c.width,c.height);
+  }
+
+  const url=c.toDataURL("image/png");
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="foto.png";
+  a.click();
+};
+</script>
+
+</body>
+</html>
