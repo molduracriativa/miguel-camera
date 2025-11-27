@@ -1,156 +1,282 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Miguel 1 ano</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Miguel 1 ano</title>
 
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; 
+    height: 100%;
+    overflow: hidden;
+    background: black;
+    font-family: Arial, sans-serif;
+  }
 
-    #video {
-      position: absolute;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-    }
+  /* câmera */
+  #video {
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    background: black;
+    z-index: 1;
+  }
 
-    #overlay {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;   /* ⚠ Garantimos que NÃO estica no preview */
-      pointer-events: none;
-      z-index: 5;
-    }
+  /* moldura visual (não grava) */
+  #overlay {
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 2;
+  }
 
-    #buttons {
-      position: absolute;
-      bottom: 50px;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      gap: 40px;
-      z-index: 10;
-    }
+  /* botões */
+  #buttons {
+    position: absolute;
+    bottom: 40px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    z-index: 10;
+  }
 
-    button {
-      width: 70px;
-      height: 70px;
-      border-radius: 50%;
-      border: none;
-      background: white;
-      font-size: 28px;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    }
+  button {
+    width: 70px;
+    height: 70px;
+    border: none;
+    border-radius: 50%;
+    background: white;
+    font-size: 26px;
+    cursor: pointer;
+  }
 
-    #preview-container {
-      position: absolute;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-    }
+  /* preview */
+  #preview-container {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    z-index: 20;
+  }
 
-    #photo-preview, #video-preview {
-      width: 85vw;
-      max-width: 330px;
-      border: 3px solid white;
-      border-radius: 10px;
-      margin-bottom: 8px;
-    }
+  #photo-preview,
+  #video-preview {
+    width: 85vw;
+    max-width: 350px;
+    border-radius: 10px;
+    border: 3px solid white;
+    margin-bottom: 10px;
+  }
 
-    #save-btn, #retry-btn {
-      background: #4CAF50;
-      color: white;
-      border-radius: 6px;
-      padding: 8px 16px;
-      font-size: 15px;
-      margin-top: 5px;
-      width: 160px;
-    }
+  #save-btn,
+  #retry-btn {
+    background: #4CAF50;
+    color: white;
+    border-radius: 6px;
+    padding: 10px 18px;
+    margin-top: 8px;
+  }
 
-    #instructions {
-      color: #fff;
-      font-size: 14px;
-      font-weight: bold;
-      background-color: rgba(0,0,0,0.6);
-      padding: 10px 12px;
-      border-radius: 8px;
-      margin-top: 10px;
-      display: none;
-      text-align: center;
-      max-width: 90%;
-    }
-  </style>
+</style>
 </head>
 
 <body>
 
-  <!-- Câmera -->
-  <video id="video" autoplay muted playsinline></video>
+<video id="video" autoplay playsinline muted></video>
+<img id="overlay" src="moldura.png" />
 
-  <!-- Moldura -->
-  <img id="overlay" src="moldura.png" />
+<div id="buttons">
+  <button id="switch-camera">🔄</button>
+  <button id="capture">📸</button>
+  <button id="record">🎥</button>
+</div>
 
-  <!-- Botões -->
-  <div id="buttons">
-    <button id="switch-camera">🔄</button>
-    <button id="capture">📸</button>
-    <button id="record">🎥</button>
-  </div>
+<canvas id="canvas" style="display:none;"></canvas>
 
-  <!-- Canvas escondido -->
-  <canvas id="canvas" style="display:none;"></canvas>
+<div id="preview-container">
+  <img id="photo-preview" style="display:none;" />
+  <video id="video-preview" controls style="display:none;"></video>
+  <button id="save-btn">Salvar</button>
+  <button id="retry-btn">Tentar novamente</button>
+</div>
 
-  <!-- Preview -->
-  <div id="preview-container">
-    <img id="photo-preview" style="display:none;" />
-    <video id="video-preview" controls style="display:none;"></video>
+<script>
+let video = document.getElementById("video");
+let overlay = document.getElementById("overlay");
+let canvas = document.getElementById("canvas");
 
-    <button id="save-btn">Salvar</button>
-    <button id="retry-btn">Tentar novamente</button>
+let captureBtn = document.getElementById("capture");
+let recordBtn = document.getElementById("record");
+let switchCameraBtn = document.getElementById("switch-camera");
 
-    <div id="instructions">
-      Se estiver no iPhone:<br>
-      Toque e segure a imagem e selecione “Salvar na Fototeca”.
-    </div>
-  </div>
+let previewContainer = document.getElementById("preview-container");
+let photoPreview = document.getElementById("photo-preview");
+let videoPreview = document.getElementById("video-preview");
 
-  <script>
-    const video = document.getElementById('video');
-    const overlay = document.getElementById('overlay');
-    const canvas = document.getElementById('canvas');
+let saveBtn = document.getElementById("save-btn");
+let retryBtn = document.getElementById("retry-btn");
 
-    const captureBtn = document.getElementById('capture');
-    const recordBtn = document.getElementById('record');
-    const switchCameraBtn = document.getElementById('switch-camera');
+let stream;
+let usingFront = true;
+let recorder;
+let chunks = [];
+let intervalDraw;
 
-    const previewContainer = document.getElementById('preview-container');
-    const photoPreview = document.getElementById('photo-preview');
-    const videoPreview = document.getElementById('video-preview');
+/* 📌 Iniciar câmera corretamente */
+async function startCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
 
-    const saveBtn = document.getElementById('save-btn');
-    const retryBtn = document.getElementById('retry-btn');
-    const instructions = document.getElementById('instructions');
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: usingFront ? "user" : "environment" },
+    audio: false
+  });
 
-    let usingFrontCamera = true;
-    let stream;
-    let recorder;
-    let recordedChunks = [];
-    let recording = false;
-    let drawInterval;
+  video.srcObject = stream;
 
-    async function startCamera() {
-      if (stream) stream.getTracks().forEach(t => t.stop());
+  video.style.transform = usingFront ? "scaleX(-1)" : "scaleX(1)";
+}
 
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: usingFrontCamera ? "user" : "environment" }
-      });
+/* 📌 Trocar câmera */
+switchCameraBtn.onclick = () => {
+  usingFront = !usingFront;
+  startCamera();
+};
 
-      video.srcObject = s
+/* 📌 Moldura perfeita sem esticar */
+function drawFrame(ctx, W, H) {
+  const fw = overlay.naturalWidth;
+  const fh = overlay.naturalHeight;
+
+  const fr = fw / fh;
+  const cr = W / H;
+
+  let w, h, x, y;
+
+  if (fr > cr) {
+    w = W;
+    h = W / fr;
+    x = 0;
+    y = (H - h) / 2;
+  } else {
+    h = H;
+    w = H * fr;
+    x = (W - w) / 2;
+    y = 0;
+  }
+
+  ctx.drawImage(overlay, x, y, w, h);
+}
+
+/* 📸 Capturar Foto */
+captureBtn.onclick = () => {
+  const track = stream.getVideoTracks()[0].getSettings();
+
+  canvas.width = track.width;
+  canvas.height = track.height;
+
+  let ctx = canvas.getContext("2d");
+
+  if (usingFront) {
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+  }
+
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.setTransform(1,0,0,1,0,0);
+  drawFrame(ctx, canvas.width, canvas.height);
+
+  photoPreview.src = canvas.toDataURL("image/png");
+  photoPreview.style.display = "block";
+  videoPreview.style.display = "none";
+  previewContainer.style.display = "flex";
+};
+
+/* 🎥 Gravar Vídeo */
+recordBtn.onclick = () => {
+  if (!recorder) startRecording();
+  else stopRecording();
+};
+
+function startRecording() {
+  recordBtn.style.background = "red";
+
+  const track = stream.getVideoTracks()[0].getSettings();
+
+  canvas.width = track.width;
+  canvas.height = track.height;
+
+  let ctx = canvas.getContext("2d");
+
+  intervalDraw = setInterval(() => {
+    if (usingFront) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.setTransform(1,0,0,1,0,0);
+    drawFrame(ctx, canvas.width, canvas.height);
+  }, 33);
+
+  let canvasStream = canvas.captureStream(30);
+
+  recorder = new MediaRecorder(canvasStream, { mimeType: "video/webm" });
+
+  chunks = [];
+  recorder.ondataavailable = e => chunks.push(e.data);
+
+  recorder.onstop = () => {
+    let blob = new Blob(chunks, { type: "video/webm" });
+    videoPreview.src = URL.createObjectURL(blob);
+
+    videoPreview.style.display = "block";
+    photoPreview.style.display = "none";
+    previewContainer.style.display = "flex";
+  };
+
+  recorder.start();
+}
+
+function stopRecording() {
+  clearInterval(intervalDraw);
+  recordBtn.style.background = "white";
+  recorder.stop();
+  recorder = null;
+}
+
+/* 💾 Salvar */
+saveBtn.onclick = () => {
+  const a = document.createElement("a");
+
+  if (photoPreview.style.display === "block") {
+    a.href = photoPreview.src;
+    a.download = "foto.png";
+  } else {
+    a.href = videoPreview.src;
+    a.download = "video.webm";
+  }
+
+  a.click();
+};
+
+/* 🔄 Tentar novamente */
+retryBtn.onclick = () => {
+  previewContainer.style.display = "none";
+};
+
+/* 🚀 Start */
+overlay.onload = () => {
+  startCamera();
+};
+</script>
+
+</body>
+</html>
