@@ -123,105 +123,143 @@
   </div>
 
 <script>
-  const video = document.getElementById('video');
-  const overlay = document.getElementById('overlay');
-  const canvas = document.getElementById('canvas');
+  <script>
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const canvas = document.createElement('canvas'); // canvas oculto para gravação
 
-  const captureBtn = document.getElementById('capture');
-  const switchCameraBtn = document.getElementById('switch-camera');
-  const startRecordBtn = document.getElementById('start-record');
-  const stopRecordBtn = document.getElementById('stop-record');
+const captureBtn = document.getElementById('capture');
+const switchCameraBtn = document.getElementById('switch-camera');
+const startRecordBtn = document.getElementById('start-record');
+const stopRecordBtn = document.getElementById('stop-record');
 
-  const photoPreview = document.getElementById('photo-preview');
-  const previewContainer = document.getElementById('preview-container');
+const photoPreview = document.getElementById('photo-preview');
+const previewContainer = document.getElementById('preview-container');
 
-  const videoPreviewContainer = document.getElementById('video-preview-container');
-  const videoPreview = document.getElementById('video-preview');
-  const saveVideoBtn = document.getElementById('save-video-btn');
-  const retryVideoBtn = document.getElementById('retry-video-btn');
+const videoPreviewContainer = document.getElementById('video-preview-container');
+const videoPreview = document.getElementById('video-preview');
+const saveVideoBtn = document.getElementById('save-video-btn');
+const retryVideoBtn = document.getElementById('retry-video-btn');
 
-  let usingFrontCamera = true;
-  let stream;
-  let mediaRecorder;
-  let recordedChunks = [];
-  let videoBlob = null;
+let usingFrontCamera = true;
+let stream;
+let mediaRecorder;
+let recordedChunks = [];
+let videoBlob = null;
+let recordingCanvasStream;
+let recordingInterval;
 
-  async function startCamera() {
+async function startCamera() {
     if (stream) stream.getTracks().forEach(t => t.stop());
 
     stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: usingFrontCamera ? 'user' : 'environment',
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
-      },
-      audio: true
+        video: {
+            facingMode: usingFrontCamera ? 'user' : 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+        },
+        audio: true
     });
 
     video.srcObject = stream;
     video.style.transform = usingFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
-  }
+}
 
-  switchCameraBtn.onclick = () => {
+switchCameraBtn.onclick = () => {
     usingFrontCamera = !usingFrontCamera;
     startCamera();
-  };
+};
 
-  /* FOTO */
-  captureBtn.onclick = () => {
+/* FOTO */
+captureBtn.onclick = () => {
     const track = stream.getVideoTracks()[0];
     const settings = track.getSettings();
+
     canvas.width = settings.width;
     canvas.height = settings.height;
 
     const ctx = canvas.getContext('2d');
 
     if (usingFrontCamera) {
-      ctx.translate(settings.width, 0);
-      ctx.scale(-1, 1);
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
     }
 
-    ctx.drawImage(video, 0, 0, settings.width, settings.height);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(overlay, 0, 0, settings.width, settings.height);
+    ctx.drawImage(overlay, 0, 0, canvas.width, canvas.height);
 
     photoPreview.src = canvas.toDataURL('image/png');
     previewContainer.style.display = 'flex';
-  };
+};
 
-  /* ------------------------------ */
-  /* 🎥 GRAVAÇÃO DE VÍDEO           */
-  /* ------------------------------ */
-  startRecordBtn.onclick = () => {
+/* ------------------------------ */
+/* 🎥 GRAVAÇÃO COM MOLDURA        */
+/* ------------------------------ */
+startRecordBtn.onclick = () => {
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+
+    // Criar stream do canvas (já com moldura)
+    recordingCanvasStream = canvas.captureStream(30);
+
+    // Adicionar áudio da câmera
+    const audioTrack = stream.getAudioTracks()[0];
+    if (audioTrack) recordingCanvasStream.addTrack(audioTrack);
+
+    // MediaRecorder usando o canvas
+    mediaRecorder = new MediaRecorder(recordingCanvasStream, {
+        mimeType: "video/webm"
+    });
+
     recordedChunks = [];
-    mediaRecorder = new MediaRecorder(stream, { mimeType: "video/webm" });
 
     mediaRecorder.ondataavailable = e => {
-      if (e.data.size > 0) recordedChunks.push(e.data);
+        if (e.data.size > 0) recordedChunks.push(e.data);
     };
 
     mediaRecorder.onstop = () => {
-      videoBlob = new Blob(recordedChunks, { type: "video/webm" });
+        videoBlob = new Blob(recordedChunks, { type: "video/webm" });
 
-      const url = URL.createObjectURL(videoBlob);
-      videoPreview.src = url;
+        const url = URL.createObjectURL(videoBlob);
+        videoPreview.src = url;
 
-      videoPreviewContainer.style.display = "block";  // Mostrar PiP
+        videoPreviewContainer.style.display = "block";
     };
 
+    // DESENHAR A CADA FRAME
+    recordingInterval = setInterval(() => {
+        if (usingFrontCamera) {
+            ctx.translate(width, 0);
+            ctx.scale(-1, 1);
+        }
+
+        ctx.drawImage(video, 0, 0, width, height);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        ctx.drawImage(overlay, 0, 0, width, height);
+    }, 33); // ~30 FPS
+
     mediaRecorder.start();
+
     startRecordBtn.style.display = "none";
     stopRecordBtn.style.display = "inline-block";
-  };
+};
 
-  stopRecordBtn.onclick = () => {
+stopRecordBtn.onclick = () => {
     mediaRecorder.stop();
+    clearInterval(recordingInterval);
+
     stopRecordBtn.style.display = "none";
     startRecordBtn.style.display = "inline-block";
-  };
+};
 
-  /* 📥 SALVAR VÍDEO */
-  saveVideoBtn.onclick = () => {
+/* 📥 SALVAR VÍDEO */
+saveVideoBtn.onclick = () => {
     if (!videoBlob) return;
 
     const a = document.createElement("a");
@@ -230,15 +268,15 @@
     a.download = "video-moldura.webm";
     a.click();
     URL.revokeObjectURL(url);
-  };
+};
 
-  /* 🔄 REFAZER VÍDEO */
-  retryVideoBtn.onclick = () => {
+/* 🔄 REFAZER VÍDEO */
+retryVideoBtn.onclick = () => {
     videoPreviewContainer.style.display = "none";
     videoBlob = null;
-  };
+};
 
-  startCamera();
+startCamera();
 </script>
-</body>
-</html>
+
+
