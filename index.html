@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Moldura - Foto e Vídeo com MP4</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: sans-serif;
+    }
+
+    #video, #overlay, #render-canvas {
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      top: 0;
+      left: 0;
+    }
+
+    #overlay {
+      pointer-events: none;
+    }
+
+    #buttons {
+      position: absolute;
+      bottom: 40px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      z-index: 20;
+    }
+
+    button {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: none;
+      background: #fff;
+      font-size: 26px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    }
+
+    #stop-record {
+      background: red;
+      color: #fff;
+      display: none;
+    }
+
+    #preview-container {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 30;
+    }
+
+    #preview-video, #photo-preview {
+      width: 90vw;
+      max-width: 350px;
+      border-radius: 10px;
+      border: 3px solid white;
+      margin-bottom: 10px;
+      background: #000;
+    }
+
+    #save-btn, #retry-btn {
+      background: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 16px;
+      border: none;
+      margin-top: 8px;
+      width: 180px;
+    }
+  </style>
+</head>
+<body>
+
+  <video id="video" autoplay muted playsinline></video>
+  <img id="overlay" src="moldura.png" />
+
+  <!-- Canvas onde será montado o vídeo com moldura -->
+  <canvas id="render-canvas"></canvas>
+
+  <div id="buttons">
+    <button id="switch-camera">🔄</button>
+    <button id="capture">📸</button>
+    <button id="record">🎥</button>
+    <button id="stop-record">⏹️</button>
+  </div>
+
+  <div id="preview-container">
+    <video id="preview-video" controls></video>
+    <img id="photo-preview" />
+    <button id="save-btn">Salvar</button>
+    <button id="retry-btn">Tentar novamente</button>
+  </div>
+
+  <!-- FFmpeg WASM para converter WEBM → MP4 -->
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.5/dist/ffmpeg.min.js"></script>
+
+<script>
+
+const video = document.getElementById("video");
+const overlay = document.getElementById("overlay");
+const renderCanvas = document.getElementById("render-canvas");
+
+const captureBtn = document.getElementById("capture");
+const recordBtn = document.getElementById("record");
+const stopRecordBtn = document.getElementById("stop-record");
+const switchCameraBtn = document.getElementById("switch-camera");
+
+const previewContainer = document.getElementById("preview-container");
+const previewVideo = document.getElementById("preview-video");
+const photoPreview = document.getElementById("photo-preview");
+
+let stream;
+let recorder;
+let chunks = [];
+let usingFront = true;
+
+// FFmpeg config
+const { createFFmpeg, fetchFile } = FFmpeg;
+const ffmpeg = createFFmpeg({ log: false });
+
+
+// -------------------------------
+// 📸 INICIAR CÂMERA
+// -------------------------------
+async function startCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: usingFront ? "user" : "environment" },
+    audio: true
+  });
+
+  video.srcObject = stream;
+  video.style.transform = usingFront ? "scaleX(-1)" : "scaleX(1)";
+}
+
+switchCameraBtn.onclick = () => {
+  usingFront = !usingFront;
+  startCamera();
+};
+
+
+// -------------------------------
+// 📸 FOTO COM MOLDURA
+// -------------------------------
+captureBtn.onclick = () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = renderCanvas.width = video.videoWidth;
+  canvas.height = renderCanvas.height = video.videoHeight;
+
+  const ctx = canvas.getContext("2d");
+
+  if (usingFront) {
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+  } else {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  }
+
+  ctx.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+
+  const img = canvas.toDataURL("image/png");
+  photoPreview.src = img;
+
+  previewVideo.style.display = "none";
+  photoPreview.style.display = "block";
+  previewContainer.style.display = "flex";
+};
+
+
+// -------------------------------
+// 🎥 INICIAR GRAVAÇÃO
+// -------------------------------
+recordBtn.onclick = async () => {
+  renderCanvas.width = video.videoWidth;
+  renderCanvas.height = video.videoHeight;
+
+  const ctx = renderCanvas.getContext("2d");
+
+  function draw() {
+    ctx.clearRect(0, 0, renderCanvas.width, renderCanvas.height);
+
+    if (usingFront) {
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, -renderCanvas.width, 0, renderCanvas.width, renderCanvas.height);
+      ctx.restore();
+    } else {
+      ctx.drawImage(video, 0, 0, renderCanvas.width, renderCanvas.height);
+    }
+
+    ctx.drawImage(overlay, 0, 0, renderCanvas.width, renderCanvas.height);
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  const canvasStream = renderCanvas.captureStream(30);
+  const audioTrack = stream.getAudioTracks()[0];
+  canvasStream.addTrack(audioTrack);
+
+  recorder = new MediaRecorder(canvasStream, { mimeType: "video/webm" });
+
+  chunks = [];
+  recorder.ondataavailable = e => chunks.push(e.data);
+
+  recorder.onstop = async () => {
+    const webmBlob = new Blob(chunks, { type: "video/webm" });
+    const mp4Blob = await convertToMP4(webmBlob);
+
+    const url = URL.createObjectURL(mp4Blob);
+    previewVideo.src = url;
+
+    previewVideo.style.display = "block";
+    photoPreview.style.display = "none";
+    previewContainer.style.display = "flex";
+  };
+
+  recorder.start();
+  recordBtn.style.display = "none";
+  stopRecordBtn.style.display = "inline-block";
+};
+
+
+// -------------------------------
+// ⏹️ PARAR GRAVAÇÃO
+// -------------------------------
+stopRecordBtn.onclick = () => {
+  recorder.stop();
+  recordBtn.style.display = "inline-block";
+  stopRecordBtn.style.display = "none";
+};
+
+
+// -------------------------------
+// 🎞️ CONVERTER WEBM → MP4
+// -------------------------------
+async function convertToMP4(webmBlob) {
+  if (!ffmpeg.isLoaded()) {
+    await ffmpeg.load();
+  }
+
+  const data = await fetchFile(webmBlob);
+  ffmpeg.FS("writeFile", "input.webm", data);
+
+  await ffmpeg.run(
+    "-i", "input.webm",
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "output.mp4"
+  );
+
+  const mp4 = ffmpeg.FS("readFile", "output.mp4");
+  return new Blob([mp4.buffer], { type: "video/mp4" });
+}
+
+
+// -------------------------------
+// 📥 SALVAR ARQUIVO
+// -------------------------------
+document.getElementById("save-btn").onclick = () => {
+  if (previewVideo.style.display !== "none") {
+    const a = document.createElement("a");
+    a.href = previewVideo.src;
+    a.download = "video.mp4";
+    a.click();
+  } else {
+    const a = document.createElement("a");
+    a.href = photoPreview.src;
+    a.download = "foto.png";
+    a.click();
+  }
+};
+
+document.getElementById("retry-btn").onclick = () => {
+  previewContainer.style.display = "none";
+};
+
+
+// -------------------------------
+startCamera();
+// -------------------------------
+
+</script>
+</body>
+</html>
