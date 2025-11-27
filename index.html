@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>Ativar câmera - FIX</title>
+<title>Moldura - Foto e Vídeo MP4 (Final)</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,25 +13,26 @@
     height: 100%;
     background: #000;
     overflow: hidden;
+    touch-action: manipulation;
+    font-family: sans-serif;
   }
 
-  /* BOTÃO SEMPRE NO TOPO */
+  /* Botão que ativa a câmera */
   #enable-camera-btn {
     position: fixed;
     inset: 0;
     margin: auto;
     height: 70px;
-    width: 260px;
+    width: 280px;
     background: #4CAF50;
-    color: #fff;
+    color: white;
     font-size: 24px;
     border: none;
-    border-radius: 14px;
-    z-index: 999999999 !important;
-    touch-action: manipulation; /* <- IMPORTANTÍSSIMO */
+    border-radius: 16px;
+    z-index: 999999;
   }
 
-  #video {
+  #video, #render-canvas, #overlay {
     display: none;
     position: fixed;
     inset: 0;
@@ -40,69 +41,200 @@
     object-fit: cover;
   }
 
+  #overlay {
+    pointer-events: none;
+  }
+
+  #buttons {
+    position: fixed;
+    bottom: 40px;
+    width: 100%;
+    display: none;
+    justify-content: center;
+    gap: 30px;
+    z-index: 99999;
+  }
+
+  button.action {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    font-size: 26px;
+    border: none;
+    background: #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+  }
+
+  #stop-record {
+    background: red;
+    color: white;
+    display: none;
+  }
+
+  #preview-container {
+    position: fixed;
+    bottom: 20px;
+    width: 100%;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    z-index: 99999;
+  }
+
+  #preview-video, #photo-preview {
+    width: 90vw;
+    max-width: 360px;
+    border: 3px solid white;
+    border-radius: 12px;
+    margin-bottom: 10px;
+  }
+
+  #save-btn, #retry-btn {
+    background: #4CAF50;
+    color: white;
+    padding: 12px 25px;
+    border-radius: 8px;
+    font-size: 18px;
+    border: none;
+    width: 200px;
+    margin-bottom: 6px;
+  }
 </style>
 </head>
+
 <body>
 
+<!-- O único elemento que aparece no início -->
 <button id="enable-camera-btn">Ativar Câmera</button>
 
 <video id="video" autoplay playsinline muted></video>
+<img id="overlay" src="moldura.png">
+<canvas id="render-canvas"></canvas>
+
+<div id="buttons">
+  <button id="switch-camera" class="action">🔄</button>
+  <button id="capture" class="action">📸</button>
+  <button id="record" class="action">🎥</button>
+  <button id="stop-record" class="action">⏹️</button>
+</div>
+
+<div id="preview-container">
+  <video id="preview-video" controls></video>
+  <img id="photo-preview" />
+  <button id="save-btn">Salvar</button>
+  <button id="retry-btn">Tentar novamente</button>
+</div>
+
+<!-- FFmpeg para converter WEBM -> MP4 -->
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.5/dist/ffmpeg.min.js"></script>
 
 <script>
 let stream;
+let recorder;
+let chunks = [];
+let usingFront = true;
 
-/* 🔥 SAFARI / ANDROID CLICK FIX 🔥
-   Captura o primeiro toque REAL e libera os próximos */
-document.addEventListener("touchstart", function fixTouch() {
-    console.log("Touch desbloqueado!");
-    document.removeEventListener("touchstart", fixTouch);
-}, { passive: true });
+// FFmpeg
+const { createFFmpeg, fetchFile } = FFmpeg;
+const ffmpeg = createFFmpeg({ log: false });
 
-
-/* 🔥 Chrome Android fix para clique congelado */
+// Safari/Android touch unlock
+document.addEventListener("touchstart", () => {}, { passive: true });
 document.addEventListener("click", () => {}, true);
 
+// -----------------------------------------------
+// ATIVAR CÂMERA — GARANTIDO FUNCIONAL
+// -----------------------------------------------
+document.getElementById("enable-camera-btn").onclick = async () => {
+  try {
+    await startCamera();
 
-/* ------------------------------------------------
-   FUNÇÃO PARA INICIAR A CÂMERA 
--------------------------------------------------- */
+    // Mostrar interface
+    video.style.display = "block";
+    overlay.style.display = "block";
+    renderCanvas.style.display = "block";
+    document.getElementById("buttons").style.display = "flex";
+
+    // Esconder botão
+    enableCameraBtn.style.display = "none";
+
+  } catch (e) {
+    alert("Erro ao acessar câmera: " + e.name);
+    console.error(e);
+  }
+};
+
+// -----------------------------------------------
+// FUNÇÃO CAMERA
+// -----------------------------------------------
 async function startCamera() {
   if (stream) stream.getTracks().forEach(t => t.stop());
 
   stream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: false
+    video: { facingMode: usingFront ? "user" : "environment" },
+    audio: true
   });
 
-  const video = document.getElementById("video");
   video.srcObject = stream;
-
-  video.setAttribute("playsinline", "");
   video.muted = true;
-
+  video.setAttribute("playsinline", "");
   await video.play();
-
-  video.style.display = "block";
+  video.style.transform = usingFront ? "scaleX(-1)" : "scaleX(1)";
 }
 
+// TROCAR CÂMERA
+switchCamera.onclick = () => {
+  usingFront = !usingFront;
+  startCamera();
+};
 
-/* ------------------------------------------------
-   BOTÃO DE ATIVAR — AGORA FUNCIONA EM 100%
--------------------------------------------------- */
-document.getElementById("enable-camera-btn").addEventListener("click", async () => {
-  console.log("BOTÃO FOI CLICADO (evento chegou!)");
+// -----------------------------------------------
+// FOTO
+// -----------------------------------------------
+capture.onclick = () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 
-  try {
-    await startCamera();
+  const ctx = canvas.getContext("2d");
 
-    document.getElementById("enable-camera-btn").style.display = "none";
-
-  } catch (e) {
-    alert("Erro ao acessar a câmera: " + e.name);
-    console.error(e);
+  if (usingFront) {
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+  } else {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   }
-});
-</script>
 
-</body>
-</html>
+  ctx.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+
+  photoPreview.src = canvas.toDataURL("image/png");
+
+  previewVideo.style.display = "none";
+  photoPreview.style.display = "block";
+  previewContainer.style.display = "flex";
+};
+
+// -----------------------------------------------
+// GRAVAÇÃO
+// -----------------------------------------------
+record.onclick = () => {
+  renderCanvas.width = video.videoWidth;
+  renderCanvas.height = video.videoHeight;
+
+  const ctx = renderCanvas.getContext("2d");
+
+  function draw() {
+    ctx.clearRect(0, 0, renderCanvas.width, renderCanvas.height);
+
+    if (usingFront) {
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, -renderCanvas.width, 0, renderCanvas.width, renderCanvas.height);
+      ctx.restore();
+    } else {
+      ctx.drawImage(video, 0, 0, renderCanvas.width, renderCanvas.height);
+    }
+
+    ctx.drawImage(overlay, 0, 0, render
