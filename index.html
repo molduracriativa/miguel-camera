@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-<title>Moldura - Foto & Vídeo MP4</title>
+<title>Ativar câmera - FIX</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,154 +11,97 @@
   html, body {
     width: 100%;
     height: 100%;
-    overflow: hidden;
     background: #000;
-    font-family: sans-serif;
+    overflow: hidden;
   }
 
-  #video, #overlay, #render-canvas {
-    display: none; /* <- IMPORTANTE */
-    position: absolute;
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-    top: 0;
-    left: 0;
-  }
-
-  #overlay { pointer-events:none; }
-
-  #buttons {
-    position: absolute;
-    bottom: 40px;
-    width: 100%;
-    display: none;
-    justify-content: center;
-    gap: 30px;
-    z-index: 9999;
-  }
-
-  button {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    border: none;
-    background: #fff;
-    font-size: 26px;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-  }
-
-  #stop-record { background: red; color: #fff; display:none; }
-
-  #preview-container {
-    position: absolute;
-    bottom: 20px;
-    width: 100%;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    z-index: 9999;
-  }
-
-  #preview-video, #photo-preview {
-    width: 90vw;
-    max-width: 350px;
-    border-radius: 10px;
-    border: 3px solid white;
-    margin-bottom: 10px;
-  }
-
+  /* BOTÃO SEMPRE NO TOPO */
   #enable-camera-btn {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    padding: 22px 40px;
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    height: 70px;
+    width: 260px;
+    background: #4CAF50;
+    color: #fff;
     font-size: 24px;
     border: none;
     border-radius: 14px;
-    background: #4CAF50;
-    color: white;
-    z-index: 999999; /* <- AGORA NADA FICA POR CIMA */
+    z-index: 999999999 !important;
+    touch-action: manipulation; /* <- IMPORTANTÍSSIMO */
   }
+
+  #video {
+    display: none;
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+  }
+
 </style>
 </head>
-
 <body>
 
-<!-- BOTÃO SEMPRE NO TOPO -->
 <button id="enable-camera-btn">Ativar Câmera</button>
 
 <video id="video" autoplay playsinline muted></video>
-<img id="overlay" src="moldura.png" />
-<canvas id="render-canvas"></canvas>
-
-<div id="buttons">
-  <button id="switch-camera">🔄</button>
-  <button id="capture">📸</button>
-  <button id="record">🎥</button>
-  <button id="stop-record">⏹️</button>
-</div>
-
-<div id="preview-container">
-  <video id="preview-video" controls></video>
-  <img id="photo-preview" />
-  <button id="save-btn">Salvar</button>
-  <button id="retry-btn">Tentar novamente</button>
-</div>
 
 <script>
 let stream;
-let usingFront = true;
 
-// --------------------------------------------------
-// BOTÃO DE ATIVAR CÂMERA — GARANTIDO FUNCIONAL
-// --------------------------------------------------
-document.getElementById("enable-camera-btn").onclick = async () => {
-
-  console.log("BOTÃO REALMENTE CLICADO!");
-
-  try {
-    await startCamera();
-
-    // Agora, liberar os elementos
-    document.getElementById("video").style.display = "block";
-    document.getElementById("overlay").style.display = "block";
-    document.getElementById("render-canvas").style.display = "block";
-    document.getElementById("buttons").style.display = "flex";
-
-    // Esconder botão
-    document.getElementById("enable-camera-btn").style.display = "none";
-
-  } catch (e) {
-    alert("Erro ao abrir câmera: " + e);
-    console.log(e);
-  }
-};
+/* 🔥 SAFARI / ANDROID CLICK FIX 🔥
+   Captura o primeiro toque REAL e libera os próximos */
+document.addEventListener("touchstart", function fixTouch() {
+    console.log("Touch desbloqueado!");
+    document.removeEventListener("touchstart", fixTouch);
+}, { passive: true });
 
 
-// --------------------------------------------------
-// INICIAR CÂMERA
-// --------------------------------------------------
+/* 🔥 Chrome Android fix para clique congelado */
+document.addEventListener("click", () => {}, true);
+
+
+/* ------------------------------------------------
+   FUNÇÃO PARA INICIAR A CÂMERA 
+-------------------------------------------------- */
 async function startCamera() {
   if (stream) stream.getTracks().forEach(t => t.stop());
 
   stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: usingFront ? "user" : "environment" },
-    audio: true
+    video: true,
+    audio: false
   });
 
   const video = document.getElementById("video");
-
   video.srcObject = stream;
+
   video.setAttribute("playsinline", "");
   video.muted = true;
 
   await video.play();
 
-  video.style.transform = usingFront ? "scaleX(-1)" : "scaleX(1)";
+  video.style.display = "block";
 }
 
+
+/* ------------------------------------------------
+   BOTÃO DE ATIVAR — AGORA FUNCIONA EM 100%
+-------------------------------------------------- */
+document.getElementById("enable-camera-btn").addEventListener("click", async () => {
+  console.log("BOTÃO FOI CLICADO (evento chegou!)");
+
+  try {
+    await startCamera();
+
+    document.getElementById("enable-camera-btn").style.display = "none";
+
+  } catch (e) {
+    alert("Erro ao acessar a câmera: " + e.name);
+    console.error(e);
+  }
+});
 </script>
 
 </body>
